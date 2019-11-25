@@ -12,7 +12,8 @@ class MasterViewController: UITableViewController, RedditProviderProtocol {
 
     var detailViewController: DetailViewController? = nil
     var objects = [Any]()
-
+    let repo = RedditProvider()
+    var loadingAlert: UIAlertController?
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -25,7 +26,15 @@ class MasterViewController: UITableViewController, RedditProviderProtocol {
             let controllers = split.viewControllers
             detailViewController = (controllers[controllers.count-1] as! UINavigationController).topViewController as? DetailViewController
         }
+        repo.delegate = self
         
+        configureLoadingAlert()
+        
+        let rc = UIRefreshControl()
+        rc.addTarget(self, action: #selector(refreshPosts), for: .valueChanged)
+        self.tableView.refreshControl = rc
+        
+        refreshPosts() 
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -38,6 +47,30 @@ class MasterViewController: UITableViewController, RedditProviderProtocol {
         objects.insert(NSDate(), at: 0)
         let indexPath = IndexPath(row: 0, section: 0)
         tableView.insertRows(at: [indexPath], with: .automatic)
+    }
+    
+    @objc
+    func refreshPosts() {
+        repo.getTopPosts()
+        showLoading()
+    }
+    // MARK: - Loading
+    
+    func configureLoadingAlert() {
+        loadingAlert = UIAlertController(title: nil, message: "Loading...", preferredStyle: .alert)
+
+        let loadingIndicator = UIActivityIndicatorView(frame: CGRect(x: 10, y: 5, width: 50, height: 50))
+        loadingIndicator.hidesWhenStopped = true
+        loadingIndicator.style = UIActivityIndicatorView.Style.medium
+        loadingIndicator.startAnimating();
+
+        loadingAlert!.view.addSubview(loadingIndicator)
+    }
+    
+    func showLoading() {
+        
+        present(loadingAlert!, animated: true, completion: nil)
+        
     }
 
     // MARK: - Segues
@@ -67,8 +100,9 @@ class MasterViewController: UITableViewController, RedditProviderProtocol {
 
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = tableView.dequeueReusableCell(withIdentifier: "Cell", for: indexPath)
-        let object = objects[indexPath.row] as! NSDate
-        cell.textLabel!.text = object.description
+        if let object = objects[indexPath.row] as? TopResponseChildren {
+            cell.textLabel!.text = object.data.title
+        }
         return cell
     }
 
@@ -89,11 +123,17 @@ class MasterViewController: UITableViewController, RedditProviderProtocol {
     // MARK: Reddit Provider Protocol
     
     func didGetTopPostsSuccess(object: TopResponse) {
-        
+//        print(object)
+        DispatchQueue.main.async {
+            self.tableView.refreshControl?.endRefreshing()
+            self.objects = object.data.children
+            self.tableView.reloadData()
+            self.loadingAlert?.dismiss(animated: true, completion: nil)
+        }
     }
     
     func didGetTopPostFailure(erorr: String) {
-        
+        print(erorr)
     }
 
 }
