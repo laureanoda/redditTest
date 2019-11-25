@@ -8,7 +8,7 @@
 
 import UIKit
 
-class MasterViewController: UITableViewController {
+class MasterViewController: UITableViewController, RedditProviderProtocol {
 
     var detailViewController: DetailViewController? = nil
     var objects = [Any]()
@@ -25,6 +25,7 @@ class MasterViewController: UITableViewController {
             let controllers = split.viewControllers
             detailViewController = (controllers[controllers.count-1] as! UINavigationController).topViewController as? DetailViewController
         }
+        
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -85,6 +86,15 @@ class MasterViewController: UITableViewController {
         }
     }
 
+    // MARK: Reddit Provider Protocol
+    
+    func didGetTopPostsSuccess(object: TopResponse) {
+        
+    }
+    
+    func didGetTopPostFailure(erorr: String) {
+        
+    }
 
 }
 
