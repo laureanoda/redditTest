@@ -8,33 +8,44 @@
 
 import UIKit
 
-class DetailViewController: UIViewController {
+class DetailViewController: UIViewController, ImageProviderProtocol {
 
     @IBOutlet weak var detailDescriptionLabel: UILabel!
-
-
-    func configureView() {
-        // Update the user interface for the detail item.
-        if let detail = detailItem {
-            if let label = detailDescriptionLabel {
-                label.text = detail.description
-            }
-        }
-    }
-
+    @IBOutlet weak var thumbnailImage: UIImageView!
+    @IBOutlet weak var loadingIndicator: UIActivityIndicatorView!
+    
+    var post: TopResponseChildrenData?
+    var imageProvider: ImageProvider?
+    
     override func viewDidLoad() {
-        super.viewDidLoad()
-        // Do any additional setup after loading the view.
-        configureView()
+        imageProvider = ImageProvider()
+        imageProvider!.delegate = self
     }
-
-    var detailItem: NSDate? {
-        didSet {
-            // Update the view.
-            configureView()
+    
+    override func viewWillAppear(_ animated: Bool) {
+        if post != nil {
+            self.detailDescriptionLabel.text = post!.title
+            loadingIndicator.startAnimating()
+            imageProvider!.getImage(fromUrl: post!.thumbnail)
         }
     }
 
+    //MARK: Image Provider Protocol
+
+    func didGetImageSuccess(image: UIImage) {
+        DispatchQueue.main.async {
+            self.thumbnailImage.image = image
+            self.loadingIndicator.stopAnimating()
+        }
+        
+    }
+
+    func didGetImageFailure(error: String) {
+        DispatchQueue.main.async {
+            print(error)
+            self.loadingIndicator.stopAnimating()
+        }
+    }
 
 }
 

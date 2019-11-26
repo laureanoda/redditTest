@@ -37,6 +37,8 @@ struct TopResponseChildrenData: Codable {
     var created_utc: Int32 //date
     var thumbnail: String //url image
     
+    var viewed: Bool? = false
+    
     func getCreatedDate() -> Date? {
         return Date(milliseconds: Int64(created_utc))
     }

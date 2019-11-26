@@ -10,30 +10,26 @@ import UIKit
 
 class MasterViewController: UITableViewController, RedditProviderProtocol {
 
+    
+    @IBOutlet weak var loadingMoreIndicator: UIActivityIndicatorView!
+    
     var detailViewController: DetailViewController? = nil
-    var objects = [Any]()
+    var redditPosts = [TopResponseChildren]()
+    var currentAfterHash = ""
     let repo = RedditProvider()
     var loadingAlert: UIAlertController?
-
+    
     override func viewDidLoad() {
         super.viewDidLoad()
         // Do any additional setup after loading the view.
-        navigationItem.leftBarButtonItem = editButtonItem
-
-        let addButton = UIBarButtonItem(barButtonSystemItem: .add, target: self, action: #selector(insertNewObject(_:)))
-        navigationItem.rightBarButtonItem = addButton
+        configureTopButtons()
         if let split = splitViewController {
             let controllers = split.viewControllers
             detailViewController = (controllers[controllers.count-1] as! UINavigationController).topViewController as? DetailViewController
         }
         repo.delegate = self
-        
         configureLoadingAlert()
-        
-        let rc = UIRefreshControl()
-        rc.addTarget(self, action: #selector(refreshPosts), for: .valueChanged)
-        self.tableView.refreshControl = rc
-        
+        configureRefreshControl()
         refreshPosts() 
     }
 
@@ -42,11 +38,16 @@ class MasterViewController: UITableViewController, RedditProviderProtocol {
         super.viewWillAppear(animated)
     }
 
+    func configureTopButtons() {
+
+        let dismissAllButton = UIBarButtonItem(barButtonSystemItem: .trash, target: self, action: #selector(dismissAllPosts(_:)))
+        navigationItem.rightBarButtonItem = dismissAllButton
+    }
+    
     @objc
-    func insertNewObject(_ sender: Any) {
-        objects.insert(NSDate(), at: 0)
-        let indexPath = IndexPath(row: 0, section: 0)
-        tableView.insertRows(at: [indexPath], with: .automatic)
+    func dismissAllPosts(_ sender: Any) {
+        redditPosts.removeAll()
+        tableView.reloadData()
     }
     
     @objc
@@ -78,9 +79,10 @@ class MasterViewController: UITableViewController, RedditProviderProtocol {
     override func prepare(for segue: UIStoryboardSegue, sender: Any?) {
         if segue.identifier == "showDetail" {
             if let indexPath = tableView.indexPathForSelectedRow {
-                let object = objects[indexPath.row] as! NSDate
+                redditPosts[indexPath.row].data.viewed = true
+                self.tableView.reloadData()
                 let controller = (segue.destination as! UINavigationController).topViewController as! DetailViewController
-                controller.detailItem = object
+                controller.post = redditPosts[indexPath.row].data
                 controller.navigationItem.leftBarButtonItem = splitViewController?.displayModeButtonItem
                 controller.navigationItem.leftItemsSupplementBackButton = true
                 detailViewController = controller
@@ -88,22 +90,60 @@ class MasterViewController: UITableViewController, RedditProviderProtocol {
         }
     }
 
+    @IBAction func dismissPost(_ sender: Any) {
+        if let btn = sender as? UIButton {
+            redditPosts.remove(at: btn.tag)
+            tableView.deleteRows(at: [IndexPath(row: btn.tag, section: 0)], with: .fade)
+            refreshTags()
+        }
+    }
+    
+    func refreshTags() {
+        var i = 0
+        for cell in tableView.visibleCells  {
+            var redditCell = cell as! RedditTableViewCell
+            redditCell.dismissButton.tag = tableView.indexPath(for: cell)?.row ?? 0
+        }
+    }
+    
     // MARK: - Table View
+    
+    func configureRefreshControl() {
+        let rc = UIRefreshControl()
+        rc.addTarget(self, action: #selector(refreshPosts), for: .valueChanged)
+        rc.tintColor = .orange
+        self.tableView.refreshControl = rc
+    }
 
     override func numberOfSections(in tableView: UITableView) -> Int {
         return 1
     }
 
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        return objects.count
+        return redditPosts.count
     }
 
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        let cell = tableView.dequeueReusableCell(withIdentifier: "Cell", for: indexPath)
-        if let object = objects[indexPath.row] as? TopResponseChildren {
-            cell.textLabel!.text = object.data.title
+        if indexPath.row >= redditPosts.count - 2 {
+            loadingMoreIndicator.startAnimating()
+            repo.getTopPosts(afterHash: currentAfterHash)
         }
+        let cell = tableView.dequeueReusableCell(withIdentifier: "postCell", for: indexPath) as! RedditTableViewCell
+        let post = redditPosts[indexPath.row]
+        
+        cell.viewedIcon!.isHidden = post.data.viewed ?? false
+        cell.authorLabel!.text = post.data.author
+        cell.titleLabel!.text = post.data.title
+        cell.timAgoLabel!.text = Date(milliseconds: Int64(post.data.created_utc)).timeAgoDisplay()
+        cell.dismissButton!.tag = indexPath.row
+        cell.commentsCountLabel!.text = "\(post.data.num_comments) Comments"
+        cell.post = post
+        
         return cell
+    }
+    
+    override func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
+        return 150
     }
 
     override func tableView(_ tableView: UITableView, canEditRowAt indexPath: IndexPath) -> Bool {
@@ -113,7 +153,7 @@ class MasterViewController: UITableViewController, RedditProviderProtocol {
 
     override func tableView(_ tableView: UITableView, commit editingStyle: UITableViewCell.EditingStyle, forRowAt indexPath: IndexPath) {
         if editingStyle == .delete {
-            objects.remove(at: indexPath.row)
+            redditPosts.remove(at: indexPath.row)
             tableView.deleteRows(at: [indexPath], with: .fade)
         } else if editingStyle == .insert {
             // Create a new instance of the appropriate class, insert it into the array, and add a new row to the table view.
@@ -123,10 +163,17 @@ class MasterViewController: UITableViewController, RedditProviderProtocol {
     // MARK: Reddit Provider Protocol
     
     func didGetTopPostsSuccess(object: TopResponse) {
-//        print(object)
+        if currentAfterHash.isEmpty {
+            self.redditPosts = object.data.children
+        } else {
+            self.redditPosts.append(contentsOf: object.data.children)
+        }
+        
+        currentAfterHash = object.data.after ?? ""
+        
         DispatchQueue.main.async {
+            self.loadingMoreIndicator.stopAnimating()
             self.tableView.refreshControl?.endRefreshing()
-            self.objects = object.data.children
             self.tableView.reloadData()
             self.loadingAlert?.dismiss(animated: true, completion: nil)
         }

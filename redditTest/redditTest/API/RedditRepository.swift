@@ -19,12 +19,15 @@ class RedditRepository {
     let defaultSession = URLSession(configuration: .default)
     var dataTask: URLSessionDataTask?
 
-    func getTop50Posts(_ completion: @escaping ((Result<TopResponse>) -> Void)) {
+    func getTop50Posts(afterHash: String,_ completion: @escaping ((Result<TopResponse>) -> Void)) {
         
         dataTask?.cancel()
         
         var urlComps = URLComponents(string: baseUrl)
         urlComps?.queryItems = [URLQueryItem(name: "limit", value: "50")]
+        if !afterHash.isEmpty {
+            urlComps?.queryItems = [URLQueryItem(name: "after", value: afterHash)]
+        }
         
         guard let url = urlComps?.url else { return }
         
@@ -43,6 +46,12 @@ class RedditRepository {
             
             
         dataTask?.resume()
+        
+    }
+    
+    func getThumbnail(_ completion: @escaping((Result<Data>) -> Void)) {
+        
+        
         
     }
     

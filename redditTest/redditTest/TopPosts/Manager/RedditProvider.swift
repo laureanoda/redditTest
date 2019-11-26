@@ -17,11 +17,11 @@ class RedditProvider {
     
     var delegate: RedditProviderProtocol?
     
-    func getTopPosts() {
+    func getTopPosts(afterHash: String = "") {
         
         let repo = RedditRepository()
         
-        repo.getTop50Posts { (result) in
+        repo.getTop50Posts(afterHash: afterHash) { (result) in
             switch result {
             case .failure(let error):
                 self.delegate?.didGetTopPostFailure(erorr: error.localizedDescription)
